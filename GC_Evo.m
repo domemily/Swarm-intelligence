@@ -1,9 +1,9 @@
 clc
 clear
-%  rand('seed',23) 
+ rand('seed',15) 
 %% initial paremeters
-n_prey=50;
-n_pred=10;
+n_prey=2;
+n_pred=2;
 timestep=1000; 
 delta=0.05;
 
@@ -22,15 +22,15 @@ delay= 20;
 d0=1;   % expected distance
 
 L=20;
-R_area=20;
-R_wall=0.5;
-R_nei = 5*r_death;
-U_c=0.0001;
-unit_s = 0.1;
-unit_e = 0.01; %
-in_e = 0.8; %
-max_e = 1; %
-min_e = 0.3;
+R_area=20;  %radius of simulation world
+R_wall=0.5; % width of wall
+R_nei_prey = 5*r_death;  % neighbor distance for local best of prey
+R_nei_pred = 5*r_death; % neighbor distance for local best of pred
+U_c=0.0001; % the energy obtaining rate for a neighborless prey
+unit_s = 0.1; % the energy obtained by pred from each prey when it is dead
+in_e = 0.8; % initial energy
+max_e = 1; % max energy
+min_e = 0.3; %min energy
 noise_pred = 0.1; %
 noise_prey = 0.1; %
 noise_active = 1; % start again with another random direction
@@ -70,11 +70,10 @@ pix_1=zeros(n_prey,1);
 piy_1=zeros(n_prey,1);
 fit_prey=zeros(n_prey,timestep);
 sbest_prey=zeros(n_prey,6,timestep);
-% gbest_prey=zeros(n_prey,6,timestep);
-gbest_prey=zeros(6,timestep);
+lbest_prey=zeros(n_prey,6,timestep);
 fit_pred=zeros(n_pred,timestep);
 sbest_pred=zeros(n_pred,6,timestep);
-gbest_pred=zeros(6,timestep);
+lbest_pred=zeros(n_pred,6,timestep);
 %% initial position
 %------------------------square initial postion--------------------
 % a=L*rand(n_prey,4)-L/2;b=L*rand(n_pred,4)-L/2;c=in_e*ones(n_prey,1);d=in_e*ones(n_pred,1);e=rand(n_prey,5);f=rand(n_pred,5);
@@ -108,12 +107,8 @@ piy_1(:)=z_prey(:,4,1);
 fit_prey(:,1)=zeros(n_prey,1); fit_pred(:,1)=zeros(n_pred,1);
 sbest_prey(:,6,1)=zeros(n_prey,1); sbest_pred(:,6,1)=zeros(n_pred,1);
 sbest_prey(:,1:5,1)=z_prey(:,6:10,1);sbest_pred(:,1:5,1)=z_pred(:,6:10,1);
-% gbest_prey(:,1:5,1) = z_prey(:,6:10,1);
-gbest_prey(1:5,1) = z_prey(6:10,1);
-gbest_pred(1:5,1) = z_pred(1,6:10,1); % asume 1st agent is the global best
-% gbest_prey(:,6,1) = zeros(n_prey,1);
-gbest_prey(6,1) = 0;
-gbest_pred(6,1) = 0;
+lbest_prey(:,1:5,1) = z_prey(:,6:10,1);lbest_pred(:,1:5,1) = z_pred(:,6:10,1); % asume 1st agent is the global best
+lbest_prey(:,6,1) = zeros(n_prey,1);lbest_pred(:,6,1) = zeros(n_pred,1);
 
 %% main loop
 
@@ -280,16 +275,28 @@ else
     
 end
 
-[gbest_pred(6,jj),index]=max(fit_pred(:,jj));
-if gbest_pred(6,jj)>gbest_pred(6,jj-1)   % obtain gbest
-    gbest_pred(6,jj)=gbest_pred(6,jj);
-    gbest_pred(1:5,jj)=z_pred(index,6:10,jj);
-else
-    gbest_pred(6,jj)=gbest_pred(6,jj-1);
-    gbest_pred(:,jj)=gbest_pred(:,jj-1);
+for k = 1 :n_pred   %obtain local best
+   d_22=sqrt((z_pred(k,1,jj-1)-z_pred(ii,1,jj-1))^2+...
+              (z_pred(k,2,jj-1)-z_pred(ii,2,jj-1))^2);
+          if d_22<R_nei_pred
+              val = fit_pred(k,jj);
+              fit_pred_neigh(ii,k) = val;
+          else
+              val = 0;
+              fit_pred_neigh(ii,k) = val; 
+          end
+
 end
 
+[lbest_pred(ii,6,jj),index]=max(fit_pred_neigh(ii,:));  % locl best
 
+if lbest_pred(ii,6,jj)>lbest_pred(ii,6,jj-1)
+    lbest_pred(ii,6,jj)=lbest_pred(ii,6,jj);
+    lbest_pred(ii,1:5,jj)=z_pred(index,6:10,jj-1);
+else
+    lbest_pred(ii,6,jj)=lbest_pred(ii,6,jj-1);
+    lbest_pred(ii,:,jj)=lbest_pred(ii,:,jj-1); 
+end
 
 
 % rebirth of predators and energy update
@@ -300,19 +307,19 @@ if z_pred(ii,5,jj)==-1000
     A = rand();B = rand(); C=A+B;
    z_pred(ii,6,jj) = z_pred(ii,6,jj-1)+...
      cog*(A/C)*(sbest_pred(ii,1,jj)-z_pred(ii,6,jj-1))+...
-     soc*(B/C)*(gbest_pred(1,jj)-z_pred(ii,6,jj-1));
+     soc*(B/C)*(lbest_pred(ii,1,jj)-z_pred(ii,6,jj-1));
    z_pred(ii,7,jj) = z_pred(ii,7,jj-1)+...
      cog*(A/C)*(sbest_pred(ii,2,jj)-z_pred(ii,7,jj-1))+...
-     soc*(B/C)*(gbest_pred(2,jj)-z_pred(ii,7,jj-1));
+     soc*(B/C)*(lbest_pred(ii,2,jj)-z_pred(ii,7,jj-1));
    z_pred(ii,8,jj) = z_pred(ii,8,jj-1)+...
      cog*(A/C)*(sbest_pred(ii,3,jj)-z_pred(ii,8,jj-1))+...
-     soc*(B/C)*(gbest_pred(3,jj)-z_pred(ii,8,jj-1));
+     soc*(B/C)*(lbest_pred(ii,3,jj)-z_pred(ii,8,jj-1));
    z_pred(ii,9,jj) = z_pred(ii,9,jj-1)+...
      cog*(A/C)*(sbest_pred(ii,4,jj)-z_pred(ii,9,jj-1))+...
-     soc*(B/C)*(gbest_pred(4,jj)-z_pred(ii,9,jj-1));
+     soc*(B/C)*(lbest_pred(ii,4,jj)-z_pred(ii,9,jj-1));
    z_pred(ii,10,jj) = z_pred(ii,10,jj-1)+...
      cog*(A/C)*(sbest_pred(ii,5,jj)-z_pred(ii,10,jj-1))+...
-     soc*(B/C)*(gbest_pred(5,jj)-z_pred(ii,10,jj-1));
+     soc*(B/C)*(lbest_pred(ii,5,jj)-z_pred(ii,10,jj-1));
     
  %---------------%average tendency------    
     
@@ -522,7 +529,7 @@ theta_prey(ii) = acos(yuxuan_prey(ii));
 
 
 
-%% obtain fit, sbest and gbest
+%% obtain fit, sbest and gbest/local best
 
 if z_prey(ii,5,jj)==-1000 % obtain fit
     fit_prey(ii,jj)=0;
@@ -539,36 +546,27 @@ else
 end
 
 
-% for k = 1 :n_prey
-%    d_11=sqrt((z_prey(k,1,jj-1)-z_prey(ii,1,jj-1))^2+...
-%               (z_prey(k,2,jj-1)-z_prey(ii,2,jj-1))^2);
-%           if d_11<R_neigh
-%               val = fit(k,jj);
-%               fit_prey_neigh(ii,k) = val;
-%           else
-%               val = 0;
-%               fit_prey_neigh(ii,k) = val; 
-%           end
-% 
-% end
+for k = 1 :n_prey   %obtain local best
+   d_11=sqrt((z_prey(k,1,jj-1)-z_prey(ii,1,jj-1))^2+...
+              (z_prey(k,2,jj-1)-z_prey(ii,2,jj-1))^2);
+          if d_11<R_nei_prey
+              val = fit_prey(k,jj);
+              fit_prey_neigh(ii,k) = val;
+          else
+              val = 0;
+              fit_prey_neigh(ii,k) = val; 
+          end
 
-% [gbest_prey(ii,6,jj),index]=max(fit_prey_neigh(ii,:));  % locl global
+end
 
-% if gbest_prey(ii,6,jj)>gbest_prey(ii,6,jj-1)
-%     gbest_prey(ii,6,jj)=gbest_prey(ii,6,jj);
-%     gbest_prey(ii,1:5,jj)=z_prey(index,6:10,jj);
-% else
-%     gbest_prey(ii,6,jj)=gbest_prey(ii,6,jj-1);
-%     gbest_prey(ii,:,jj)=gbest_prey(ii,:,jj-1); 
-% end
+[lbest_prey(ii,6,jj),index]=max(fit_prey_neigh(ii,:));  % locl best
 
-[gbest_prey(6,jj),index]=max(fit_prey(:,jj));
-if gbest_prey(6,jj)>gbest_prey(6,jj-1)   % obtain gbest
-    gbest_prey(6,jj)=gbest_prey(6,jj);
-    gbest_prey(1:5,jj)=z_prey(index,6:10,jj);
+if lbest_prey(ii,6,jj)>lbest_prey(ii,6,jj-1)
+    lbest_prey(ii,6,jj)=lbest_prey(ii,6,jj);
+    lbest_prey(ii,1:5,jj)=z_prey(index,6:10,jj-1);
 else
-    gbest_prey(6,jj)=gbest_prey(6,jj-1);
-    gbest_prey(:,jj)=gbest_prey(:,jj-1);
+    lbest_prey(ii,6,jj)=lbest_prey(ii,6,jj-1);
+    lbest_prey(ii,:,jj)=lbest_prey(ii,:,jj-1); 
 end
 
 %% energy update  and  rebirth of preys 
@@ -591,38 +589,38 @@ end
 
    z_prey(ii,6,jj) = z_prey(ii,6,jj-1)+...
      cog*(A/C)*(sbest_prey(ii,1,jj)-z_prey(ii,6,jj-1))+...
-     soc*(B/C)*(gbest_prey(1,jj)-z_prey(ii,6,jj-1))+D;
+     soc*(B/C)*(lbest_prey(ii,1,jj)-z_prey(ii,6,jj-1))+D;
    z_prey(ii,7,jj) = z_prey(ii,7,jj-1)+...
      cog*(A/C)*(sbest_prey(ii,2,jj)-z_prey(ii,7,jj-1))+...
-     soc*(B/C)*(gbest_prey(2,jj)-z_prey(ii,7,jj-1))+D;
+     soc*(B/C)*(lbest_prey(ii,2,jj)-z_prey(ii,7,jj-1))+D;
    z_prey(ii,8,jj) = z_prey(ii,8,jj-1)+...
      cog*(A/C)*(sbest_prey(ii,3,jj)-z_prey(ii,8,jj-1))+...
-     soc*(B/C)*(gbest_prey(3,jj)-z_prey(ii,8,jj-1))+D;
+     soc*(B/C)*(lbest_prey(ii,3,jj)-z_prey(ii,8,jj-1))+D;
    z_prey(ii,9,jj) = z_prey(ii,9,jj-1)+...
      cog*(A/C)*(sbest_prey(ii,4,jj)-z_prey(ii,9,jj-1))+...
-     soc*(B/C)*(gbest_prey(4,jj)-z_prey(ii,9,jj-1))+D;
+     soc*(B/C)*(lbest_prey(ii,4,jj)-z_prey(ii,9,jj-1))+D;
    z_prey(ii,10,jj) = z_prey(ii,10,jj-1)+...
      cog*(A/C)*(sbest_prey(ii,5,jj)-z_prey(ii,10,jj-1))+...
-     soc*(B/C)*(gbest_prey(5,jj)-z_prey(ii,10,jj-1))+D;
+     soc*(B/C)*(lbest_prey(ii,5,jj)-z_prey(ii,10,jj-1))+D;
  %-----------feasible area------------------------------------------
  if z_prey(ii,6,jj)<0
-     z_prey(ii,6,jj)=0;
+     z_prey(ii,6,jj)=0.1;
  else
  end
   if z_prey(ii,7,jj)<0
-     z_prey(ii,7,jj)=0;
+     z_prey(ii,7,jj)=0.1;
  else
   end
   if z_prey(ii,8,jj)<0
-     z_prey(ii,8,jj)=0;
+     z_prey(ii,8,jj)=0.1;
  else
   end
   if z_prey(ii,9,jj)<0
-     z_prey(ii,9,jj)=0;
+     z_prey(ii,9,jj)=0.1;
  else
   end
   if z_prey(ii,10,jj)<0
-     z_prey(ii,10,jj)=0;
+     z_prey(ii,10,jj)=0.1;
  else
  end
  %----------------------------------------------------------------
