@@ -1,6 +1,6 @@
 # Swarm-intelligence
-group chase and escape
-matlab code
+
+Matlab codes for multi-agent system, swarm robotics, agent based modeling and simulation.
 
 The matlab codes are some cases for multi-agent system, with particular focus on aggregation/segregation behaviors, group chase and escape behaviors, pursuit-evasion behaivors, multi-target trapping with swarm robots.
 
